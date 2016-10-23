@@ -1,0 +1,15 @@
+create table submitted_letters(
+id int AUTO_INCREMENT,
+letter_created timestamp,
+submit_company_id int,
+first_name varchar(30),
+second_name varchar(30),
+company varchar(30),
+first_line_address varchar(100),
+second_line_address varchar(100),
+city varchar(100),
+postcode varchar(10),
+country varchar(10),
+salutation_number int,
+content text,
+PRIMARY KEY (id));
