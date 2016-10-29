@@ -49,72 +49,101 @@ def check_uptime():
             return jsonify({'Success': True, "Action": "Uptime tag entered into database"})
 
         else:
-            return jsonify({'Call Failed': "Unauthenticated Call, Credentials Wrong"})
+            return make_response(jsonify({'Call Failed': "Unauthenticated Call, Credentials Wrong"}), 401)
 
 @app.route('/handwritten/api/submit', methods=['POST'])
 def submit_letters():
-    if not request.headers or "authentication" not in request.headers:
-        return jsonify({'error': 'Please provide authentication'})
+    try:
+        if not request.headers or "authentication" not in request.headers:
+            return make_response(jsonify({'error': 'Please provide authentication'}),401)
 
-    else:
-        if check_authentication(request.headers["authentication"]) == True:
-            mandatory_list = ["first_name", "second_name", "first_line_address", "city", "postcode", "salutation_type","content"]
-            for thing in mandatory_list:
-                if thing not in request.json:
-                    print "started looking at things"
-                    return jsonify({'error': 'Please enter all required details - missing %s' % thing})
+        else:
+            if check_authentication(request.headers["authentication"]) == True:
+                mandatory_list = ["first_name", "second_name", "first_line_address", "city", "postcode", "salutation_type","content"]
+                for thing in mandatory_list:
+                    if thing not in request.json:
+                        print "started looking at things"
+                        return make_response(jsonify({'error': 'Please enter all required details - missing %s' % thing}),428)
+                    else:
+                        continue
+
+                first_name = request.json['first_name']
+                second_name = request.json['second_name']
+                if 'company' in request.json:
+                    company = request.json['company']
                 else:
-                    continue
+                    company = 'Null'
+                first_line_address = request.json['first_line_address']
+                if 'second_line_address' in request.json:
+                    second_line_address = request.json['second_line_address']
+                else:
+                    second_line_address = 'Null'
+                city = request.json['city']
+                postcode = request.json['postcode']
+                if "country" in request.json:
+                    country = request.json['country']
+                else:
+                    country = 'Null'
+                salutation_type = request.json['salutation_type']
+                content = request.json['content']
 
-            first_name = request.json['first_name']
-            second_name = request.json['second_name']
-            if 'company' in request.json:
-                company = request.json['company']
+                ts = datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S')
+
+                # GRAB COMPANY ID TO ASSIGN LETTER FOR
+                cursor.execute("select id from companies where hashkey = '%s';" % request.headers['authentication'])
+                company_id = str(cursor.fetchone()).replace("(", "").replace("L,)", "")
+
+                cursor.execute("insert into submitted_letters (letter_created, submit_company_id, first_name,second_name,company,first_line_address,second_line_address, city,postcode,country,salutation_number,content) values ('%s',%s,'%s','%s','%s','%s','%s','%s','%s','%s','%s','%s');" % (ts, company_id, first_name, second_name, company, first_line_address, second_line_address, city, postcode, country, salutation_type, content))
+                db.commit()
+
+                return make_response(jsonify({'Call Status': "Success", "Details":{"first_name": first_name, "second_name": second_name, "first_line_address": first_line_address, "second_line_address": second_line_address, "city": city, "postcode": postcode, "country": country, "salutation_number": salutation_type}}),200)
+
             else:
-                company = 'Null'
-            first_line_address = request.json['first_line_address']
-            if 'second_line_address' in request.json:
-                second_line_address = request.json['second_line_address']
-            else:
-                second_line_address = 'Null'
-            city = request.json['city']
-            postcode = request.json['postcode']
-            if "country" in request.json:
-                country = request.json['country']
-            else:
-                country = 'Null'
-            salutation_type = request.json['salutation_type']
-            content = request.json['content']
+                return make_response(jsonify({'Call Failed': "Unauthenticated Call, Credentials Wrong"}), 401)
+    except :
+        return make_response(jsonify({'error': 'bad request'}), 400)
 
-            ts = datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S')
-
-            # GRAB COMPANY ID TO ASSIGN LETTER FOR
-            cursor.execute("select id from companies where hashkey = '%s';" % request.headers['authentication'])
-            company_id = str(cursor.fetchone()).replace("(", "").replace("L,)", "")
-
-            cursor.execute("insert into submitted_letters (letter_created, submit_company_id, first_name,second_name,company,first_line_address,second_line_address, city,postcode,country,salutation_number,content) values ('%s',%s,'%s','%s','%s','%s','%s','%s','%s','%s','%s','%s');" % (ts, company_id, first_name, second_name, company, first_line_address, second_line_address, city, postcode, country, salutation_type, content))
-            db.commit()
-
-            return jsonify({'Call Status': "Success", "Details":{"first_name": first_name, "second_name": second_name, "first_line_address": first_line_address, "second_line_address": second_line_address, "city": city, "postcode": postcode, "country": country, "salutation_number": salutation_type}})
-
-        else:
-            return jsonify({'Call Failed': "Unauthenticated Call, Credentials Wrong"})
-
-@app.route('/handwritten/api/submit', methods=['GET'])
+@app.route('/handwritten/api/status', methods=['POST'])
 def check_status():
-
-    if not request.headers or "authentication" not in request.headers:
-        return jsonify({'error': 'Please provide authentication'})
-
-    else:
-        if check_authentication(request.headers["authentication"]) == True:
-
-        # ADD CODE IN HERE TO CHECK HOW LONG THE LETTER WAS WRITTEN TO THE DB AGO AND INSINUATE HOW LONG IT IS GOING TO BE
-
-            return jsonify({'Success': True, "Action": "Uptime tag entered into database"})
+    try:
+        if not request.headers or "authentication" not in request.headers:
+            return make_response(jsonify({'error': 'Please provide authentication'}), 401)
 
         else:
-            return jsonify({'Call Failed': "Unauthenticated Call, Credentials Wrong"})
+            if check_authentication(request.headers["authentication"]) == True:
+
+                if not request.json or not 'start_date' or not 'end_date' in request.json:
+                    return make_response(jsonify({'error': 'Please provide start_date and end_date parameters'}), 400)
+
+                else:
+                    start_date = request.json['start_date']
+                    end_date = request.json['end_date']
+
+                    cursor.execute("select case when datediff(now(),letter_created) <= %s then 'Processing' else 'Sent' end as status, letter_created, first_name, second_name, sub.company, first_line_address, city, postcode, salutation_number, substring(content, 0, 3 ) content_preview from submitted_letters sub inner join companies com on com.id = sub.submit_company_id where com.hashkey = '%s' and date(letter_created) >= '%s' and date(letter_created) <= '%s';" % (LetterTTC, request.headers['authentication'], start_date, end_date))
+                    job_query = cursor.fetchall()
+
+                    jobs= []
+
+                    for job in job_query:
+                        param = {}
+                        param['Company'] = job[4]
+                        param['Status'] = job[0]
+                        param['Letter Created'] = job[1]
+                        param['First Name'] = job[2]
+                        param['Second Name'] = job[3]
+                        param['City'] = job[5]
+                        param['Postcode'] = job[6]
+                        param['Salutation Number'] = job[7]
+                        param['Content Head'] = job[8]
+                        jobs.append(param)
+
+                    return make_response(jsonify({'Success': True, "Jobs": jobs}), 200)
+
+            else:
+                return make_response(jsonify({'Call Failed': "Unauthenticated Call, Credentials Wrong"}),401)
+    except Exception, e:
+        print str(e)
+        return make_response(jsonify({'error': 'bad request'}), 400)
 
 @app.route('/directors/api/v1.0/list', methods=['GET'])
 def get_directors():
