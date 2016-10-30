@@ -11,7 +11,7 @@ import datetime
 
 # Set variables for the future
 LetterTTC = 4
-UPLOAD_FOLDER = '/home/pi/Desktop/Submitted_Letters'
+UPLOAD_FOLDER = '/home/pi/Desktop/Submitted_Letters/'
 
 # Get credentials from the conf2.ini file
 config = configparser.ConfigParser()
