@@ -1,16 +1,18 @@
 __author__ = 'brucepannaman'
 
-#curl -i -H "Content-Type: application/json" -X POST -d '{"name":"Hannah", "age":25, "position":"On Her Knees"}' http://localhost:10101/directors/api/v1.0/add
 #!flask/bin/python
-from flask import Flask, jsonify, request, make_response
+from flask import Flask, jsonify, request, make_response, redirect, url_for
+from werkzeug.utils import secure_filename
 import MySQLdb
 import configparser
 import time
 import datetime
+import os
 
 
 # Set variables for the future
 LetterTTC = 4
+UPLOAD_FOLDER = '/Users/Bruce/Desktop/'
 
 # Get credentials from the conf2.ini file
 config = configparser.ConfigParser()
@@ -19,7 +21,13 @@ ini = config.read('conf.ini')
 HOST = config.get('Brandwritten_DB', 'HOST')
 USER = config.get('Brandwritten_DB', 'USER')
 PASSWORD = config.get('Brandwritten_DB', 'PASSWORD')
+
+
 app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 1 * 1024 * 1024
+
+ALLOWED_EXTENSIONS = set(['pdf', 'docx', 'html'])
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # AUTHENTICATES USER WITH THEIR AUTHENTICATION CREDS IN
 def check_authentication(hashkey):
@@ -30,7 +38,20 @@ def check_authentication(hashkey):
         print "passed authentication"
         return True
 
+
+def allowed_file(filename):
+    return '.' in filename and \
+filename.rsplit('.', 1)[1] in ALLOWED_EXTENSIONS
+
+
+def get_company_id(hashkey):
+    # GRAB COMPANY ID TO ASSIGN LETTER FOR
+    cursor.execute("select id from companies where hashkey = '%s';" % hashkey)
+    return str(cursor.fetchone()).replace("(", "").replace("L,)", "")
+
+
 # WRITES TO THE DB WHEN CALLED WITH THE TIME AND IP TO COLLECT DATA ON SERVER UPTIME
+# e.g curl -i -H "authentication:13f8255273325f929d3ce06011b7a5eacd3bc1ebc6e2d557359ba7c5" -X POST http://api.brandwritten.com:10101/maintenance/api/uptime
 @app.route('/maintenance/api/uptime', methods=['POST'])
 def check_uptime():
 
@@ -53,17 +74,20 @@ def check_uptime():
 
 @app.route('/handwritten/api/submit', methods=['POST'])
 def submit_letters():
+    # Ensure no html errors
     try:
         if not request.headers or "authentication" not in request.headers:
             return make_response(jsonify({'error': 'Please provide authentication'}),401)
-
+        # Go through authentication
         else:
             if check_authentication(request.headers["authentication"]) == True:
-                mandatory_list = ["first_name", "second_name", "first_line_address", "city", "postcode", "salutation_type","content"]
+                mandatory_list = ["first_name", "second_name", "first_line_address", "city", "postcode", "salutation_type"]
+
+                # Validation of field names and file types
+                print "Validating submitted letter"
                 for thing in mandatory_list:
                     if thing not in request.json:
-                        print "started looking at things"
-                        return make_response(jsonify({'error': 'Please enter all required details - missing %s' % thing}),428)
+                        return make_response(jsonify({'error': 'Please enter all required details - missing %s' % thing}), 428)
                     else:
                         continue
 
@@ -85,22 +109,74 @@ def submit_letters():
                 else:
                     country = 'Null'
                 salutation_type = request.json['salutation_type']
-                content = request.json['content']
+                content = 0
 
                 ts = datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S')
-
-                # GRAB COMPANY ID TO ASSIGN LETTER FOR
-                cursor.execute("select id from companies where hashkey = '%s';" % request.headers['authentication'])
-                company_id = str(cursor.fetchone()).replace("(", "").replace("L,)", "")
+                hashkey = request.headers['authentication']
+                company_id = get_company_id(hashkey)
 
                 cursor.execute("insert into submitted_letters (letter_created, submit_company_id, first_name,second_name,company,first_line_address,second_line_address, city,postcode,country,salutation_number,content) values ('%s',%s,'%s','%s','%s','%s','%s','%s','%s','%s','%s','%s');" % (ts, company_id, first_name, second_name, company, first_line_address, second_line_address, city, postcode, country, salutation_type, content))
                 db.commit()
 
-                return make_response(jsonify({'Call Status': "Success", "Details":{"first_name": first_name, "second_name": second_name, "first_line_address": first_line_address, "second_line_address": second_line_address, "city": city, "postcode": postcode, "country": country, "salutation_number": salutation_type}}),200)
+                # Grab the of the job to return
+                cursor.execute("select max(sub.id) from submitted_letters sub inner join companies com on com.id = sub.submit_company_id where hashkey = '%s';" % request.headers['authentication'])
+                job_id = str(cursor.fetchone()).replace("(", "").replace("L,)", "")
+
+                return make_response(jsonify({'Call Status': "Success", "Job_id":job_id, "Details": {"first_name": first_name, "second_name": second_name, "first_line_address": first_line_address, "second_line_address": second_line_address, "city": city, "postcode": postcode, "country": country, "salutation_number": salutation_type}}), 200)
 
             else:
                 return make_response(jsonify({'Call Failed': "Unauthenticated Call, Credentials Wrong"}), 401)
-    except :
+    except Exception, e:
+        print str(e)
+        return make_response(jsonify({'error': 'bad request'}), 400)
+
+@app.route('/handwritten/api/submit_file', methods=['POST'])
+def submit_letter_file():
+    try:
+        # Go through authentication
+        if not request.headers or "authentication" not in request.headers:
+            return make_response(jsonify({'error': 'Please provide authentication'}), 401)
+
+        else:
+            if check_authentication(request.headers["authentication"]) == True:
+
+                if not request.files or 'message' not in request.files:
+                    return make_response(jsonify({'Call Failed': "No handwritten message content, please add content"}), 415)
+                else:
+                    submitted_file = request.files['message']
+
+                if "job_id" not in request.form:
+                    return make_response(jsonify({'Call Failed': "No job_id corresponding to previously submitted letter given"}), 415)
+                else:
+                    job_id = request.form["job_id"]
+
+                hashkey = request.headers['authentication']
+                company_id = get_company_id(hashkey)
+
+                cursor.execute("select content from submitted_letters where id = '%s';" % job_id)
+                result = str(cursor.fetchone()).replace("(", "").replace("L,)", "")
+                print result
+
+                if '1' in result:
+                    return make_response(jsonify({'Call Failed': "Message already attached to this letter"}), 415)
+
+                if submitted_file.filename == '' or allowed_file(submitted_file.filename) == False:
+                    return make_response(jsonify({'Call Failed': "Incorrect file type"}), 415)
+
+                submitted_filename = str(company_id) + "-" + str(job_id) + "." + str(submitted_file.filename.rsplit('.', 1)[1])
+                filename = secure_filename(submitted_filename)
+                with open("%s%s" % (UPLOAD_FOLDER, filename), 'wb') as writer:
+                    writer.writelines(submitted_file)
+
+                # submitted_file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+
+                cursor.execute("update submitted_letters set content = 1 where id = '%s';" % job_id)
+                db.commit()
+
+                return make_response(jsonify({'Success': 'Message successfully added to job', "Job_id": job_id }), 200)
+
+    except Exception, e:
+        print str(e)
         return make_response(jsonify({'error': 'bad request'}), 400)
 
 @app.route('/handwritten/api/status', methods=['POST'])
@@ -144,55 +220,6 @@ def check_status():
     except Exception, e:
         print str(e)
         return make_response(jsonify({'error': 'bad request'}), 400)
-
-@app.route('/directors/api/v1.0/list', methods=['GET'])
-def get_directors():
-
-    cursor.execute("select * from api_test;")
-    directors_query = cursor.fetchall()
-
-    directors = []
-    for director in directors_query:
-        el_jefe = {}
-        el_jefe['name'] = director[1]
-        el_jefe['age'] = director[2]
-        el_jefe['position'] = director[3]
-        directors.append(el_jefe)
-
-    return jsonify({'directors': directors})
-
-
-@app.route('/directors/api/v1.0/add', methods=['POST'])
-def add_directors():
-
-    if not request.json or not 'name' or not 'age' or not 'position' in request.json:
-        make_response(jsonify({'error': 'Un-Authorised'}), 400)
-
-    else:
-
-        name = request.json['name']
-        age = request.json['age']
-        position = request.json['position']
-
-        cursor.execute("insert into api_test (name, age, position) values ('%s', %s, '%s');" % (name, age, position))
-        db.commit()
-
-        return jsonify({'task': 'Success - Added %s to the table' % name}), 201
-
-@app.route('/directors/api/v1.0/remove', methods=['POST'])
-def delete_directors():
-
-    if not request.json or not 'name' in request.json:
-        make_response(jsonify({'error': 'Un-Authorised'}), 400)
-
-    else:
-
-        name = request.json['name']
-
-        cursor.execute("delete from api_test where name = '%s';" % name)
-        db.commit()
-
-        return jsonify({'task': 'Success - Removed %s from the table' % name}), 201
 
 @app.errorhandler(404)
 def not_found(error):
