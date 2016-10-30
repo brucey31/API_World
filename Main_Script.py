@@ -12,7 +12,7 @@ import os
 
 # Set variables for the future
 LetterTTC = 4
-UPLOAD_FOLDER = '/Users/Bruce/Desktop/'
+UPLOAD_FOLDER = '~/Desktop/'
 
 # Get credentials from the conf2.ini file
 config = configparser.ConfigParser()
