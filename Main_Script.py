@@ -7,7 +7,6 @@ import MySQLdb
 import configparser
 import time
 import datetime
-import os
 
 
 # Set variables for the future
@@ -195,25 +194,29 @@ def check_status():
                     start_date = request.json['start_date']
                     end_date = request.json['end_date']
 
-                    cursor.execute("select case when datediff(now(),letter_created) <= %s then 'Processing' else 'Sent' end as status, letter_created, first_name, second_name, sub.company, first_line_address, city, postcode, salutation_number, content from submitted_letters sub inner join companies com on com.id = sub.submit_company_id where com.hashkey = '%s' and date(letter_created) >= '%s' and date(letter_created) <= '%s';" % (LetterTTC, request.headers['authentication'], start_date, end_date))
+                    cursor.execute("select case when datediff(now(),letter_created) <= %s then 'Processing' else 'Sent' end as status, letter_created, first_name, second_name, sub.company, first_line_address, city, postcode, salutation_number, content, sub.id from submitted_letters sub inner join companies com on com.id = sub.submit_company_id where com.hashkey = '%s' and date(letter_created) >= '%s' and date(letter_created) <= '%s';" % (LetterTTC, request.headers['authentication'], start_date, end_date))
                     job_query = cursor.fetchall()
 
                     jobs= []
 
                     for job in job_query:
+
                         param = {}
-                        param['Company'] = job[4]
                         param['Status'] = job[0]
                         param['Letter Created'] = job[1]
                         param['First Name'] = job[2]
                         param['Second Name'] = job[3]
-                        param['City'] = job[5]
-                        param['Postcode'] = job[6]
-                        param['Salutation Number'] = job[7]
-                        if job[8] == 1:
+                        param['Company'] = job[4]
+                        param['First Line Address'] = job[5]
+                        param['City'] = job[6]
+                        param['Postcode'] = job[7]
+                        param['Salutation Number'] = job[8]
+                        if "1" in job[9]:
                             param['Content'] = "Message Attached"
                         else:
                             param['Content'] = "No Message Attached Yet"
+                        param['Job Id'] = job[10]
+
                         jobs.append(param)
 
                     return make_response(jsonify({'Success': True, "Jobs": jobs}), 200)
@@ -234,6 +237,7 @@ if __name__ == '__main__':
     db = MySQLdb.connect(host=HOST, user=USER, passwd=PASSWORD, db="brandwritten")
     # prepare a cursor object using cursor() method
     cursor = db.cursor()
+    cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;")
 
     app.run(host='0.0.0.0', port=10101, debug=True)
 
