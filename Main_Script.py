@@ -12,7 +12,7 @@ import os
 
 # Set variables for the future
 LetterTTC = 4
-UPLOAD_FOLDER = '~/Desktop/'
+UPLOAD_FOLDER = '/home/pi/Desktop/Submitted_Letters'
 
 # Get credentials from the conf2.ini file
 config = configparser.ConfigParser()
@@ -195,7 +195,7 @@ def check_status():
                     start_date = request.json['start_date']
                     end_date = request.json['end_date']
 
-                    cursor.execute("select case when datediff(now(),letter_created) <= %s then 'Processing' else 'Sent' end as status, letter_created, first_name, second_name, sub.company, first_line_address, city, postcode, salutation_number, substring(content, 0, 3 ) content_preview from submitted_letters sub inner join companies com on com.id = sub.submit_company_id where com.hashkey = '%s' and date(letter_created) >= '%s' and date(letter_created) <= '%s';" % (LetterTTC, request.headers['authentication'], start_date, end_date))
+                    cursor.execute("select case when datediff(now(),letter_created) <= %s then 'Processing' else 'Sent' end as status, letter_created, first_name, second_name, sub.company, first_line_address, city, postcode, salutation_number, content from submitted_letters sub inner join companies com on com.id = sub.submit_company_id where com.hashkey = '%s' and date(letter_created) >= '%s' and date(letter_created) <= '%s';" % (LetterTTC, request.headers['authentication'], start_date, end_date))
                     job_query = cursor.fetchall()
 
                     jobs= []
@@ -210,7 +210,10 @@ def check_status():
                         param['City'] = job[5]
                         param['Postcode'] = job[6]
                         param['Salutation Number'] = job[7]
-                        param['Content Head'] = job[8]
+                        if job[8] == 1:
+                            param['Content'] = "Message Attached"
+                        else:
+                            param['Content'] = "No Message Attached Yet"
                         jobs.append(param)
 
                     return make_response(jsonify({'Success': True, "Jobs": jobs}), 200)
@@ -223,6 +226,7 @@ def check_status():
 
 @app.errorhandler(404)
 def not_found(error):
+    print error
     return make_response(jsonify({'error': 'Not found'}), 404)
 
 if __name__ == '__main__':
