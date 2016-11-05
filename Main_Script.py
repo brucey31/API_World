@@ -250,7 +250,7 @@ def cancel_letter():
 
                     if isinstance(cancelled_jobs, list):
                         for job in cancelled_jobs:
-                            cursor.execute("select distinct sub.id from submitted_letters sub inner join companies comp on comp.id = sub.submit_company_id where comp.hashkey = '%s' and sub.id = %s and datediff(now(), letter_created) < 1;" % (hashkey, job))
+                            cursor.execute("select distinct sub.id from submitted_letters sub inner join companies comp on comp.id = sub.submit_company_id where comp.hashkey = '%s' and sub.id = %s and datediff(now(), letter_created) < 1 and cancelled = 0;" % (hashkey, job))
                             result = str(cursor.fetchone()).replace("(", "").replace("L,)", "")
                             if result == 'None':
                                 non_cancelled_letters.append(job)
@@ -262,7 +262,7 @@ def cancel_letter():
                         cursor.execute("update submitted_letters set cancelled = 1 where id in (%s);" % jobs_to_be_cancelled_string)
                         db.commit()
 
-                        return make_response(jsonify({'Success': True, "Jobs_Cancelled": jobs_to_be_cancelled, "Jobs_Not_Cancelled": non_cancelled_letters}), 200)
+                        return make_response(jsonify({'Success': True, "Jobs_Ids_Cancelled": jobs_to_be_cancelled, "Jobs_Ids_Not_Cancelled": non_cancelled_letters}), 200)
 
                     else:
                         return make_response(jsonify({'Call Failed': "job_ids variable need to be in an array"}), 415)
