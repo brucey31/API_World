@@ -250,7 +250,7 @@ def cancel_letter():
 
                     if isinstance(cancelled_jobs, list):
                         for job in cancelled_jobs:
-                            cursor.execute("select distinct sub.id from submitted_letters sub inner join companies comp on comp.id = sub.submit_company_id where comp.hashkey = '%s' and sub.id = %s and datediff(now(), letter_created) < 1 and cancelled = 0;" % (hashkey, job))
+                            cursor.execute("select distinct sub.id from submitted_letters sub inner join companies comp on comp.id = sub.submit_company_id where comp.hashkey = '%s' and sub.id = %s and datediff(now(), letter_created) < 1" % (hashkey, job))
                             result = str(cursor.fetchone()).replace("(", "").replace("L,)", "")
                             if result == 'None':
                                 non_cancelled_letters.append(job)
