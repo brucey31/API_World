@@ -11,5 +11,6 @@ city varchar(100),
 postcode varchar(10),
 country varchar(10),
 salutation_number int,
+cancelled int,
 content text,
 PRIMARY KEY (id));

@@ -50,7 +50,6 @@ def get_company_id(hashkey):
 
 
 # WRITES TO THE DB WHEN CALLED WITH THE TIME AND IP TO COLLECT DATA ON SERVER UPTIME
-# e.g curl -i -H "authentication:13f8255273325f929d3ce06011b7a5eacd3bc1ebc6e2d557359ba7c5" -X POST http://api.brandwritten.com:10101/maintenance/api/uptime
 @app.route('/maintenance/api/uptime', methods=['POST'])
 def check_uptime():
 
@@ -71,6 +70,7 @@ def check_uptime():
         else:
             return make_response(jsonify({'Call Failed': "Unauthenticated Call, Credentials Wrong"}), 401)
 
+# HOW TO SUBMIT A THE FULL DETAILS OF A NEW LETTER
 @app.route('/handwritten/api/submit', methods=['POST'])
 def submit_letters():
     # Ensure no html errors
@@ -114,7 +114,7 @@ def submit_letters():
                 hashkey = request.headers['authentication']
                 company_id = get_company_id(hashkey)
 
-                cursor.execute("insert into submitted_letters (letter_created, submit_company_id, first_name,second_name,company,first_line_address,second_line_address, city,postcode,country,salutation_number,content) values ('%s',%s,'%s','%s','%s','%s','%s','%s','%s','%s','%s','%s');" % (ts, company_id, first_name, second_name, company, first_line_address, second_line_address, city, postcode, country, salutation_type, content))
+                cursor.execute("insert into submitted_letters (letter_created, submit_company_id, first_name,second_name,company,first_line_address,second_line_address, city,postcode,country,salutation_number,cancelled, content) values ('%s',%s,'%s','%s','%s','%s','%s','%s','%s','%s','%s',0,'%s');" % (ts, company_id, first_name, second_name, company, first_line_address, second_line_address, city, postcode, country, salutation_type, content))
                 db.commit()
 
                 # Grab the of the job to return
@@ -129,6 +129,7 @@ def submit_letters():
         print str(e)
         return make_response(jsonify({'error': 'bad request'}), 400)
 
+# ADD CONTENT TO A LETTER THAT HAS PREVIOUSLY BEEN SUBMITTED
 @app.route('/handwritten/api/submit_file', methods=['POST'])
 def submit_letter_file():
     try:
@@ -178,6 +179,7 @@ def submit_letter_file():
         print str(e)
         return make_response(jsonify({'error': 'bad request'}), 400)
 
+# CHECK WHAT LETTERS YOU HAVE ORDERED BETWEEN TWO DATES AND WHETHER THEY HAVE BEEN PROCESSED OR NOT
 @app.route('/handwritten/api/status', methods=['POST'])
 def check_status():
     try:
@@ -194,7 +196,7 @@ def check_status():
                     start_date = request.json['start_date']
                     end_date = request.json['end_date']
 
-                    cursor.execute("select case when datediff(now(),letter_created) <= %s then 'Processing' else 'Sent' end as status, letter_created, first_name, second_name, sub.company, first_line_address, city, postcode, salutation_number, content, sub.id from submitted_letters sub inner join companies com on com.id = sub.submit_company_id where com.hashkey = '%s' and date(letter_created) >= '%s' and date(letter_created) <= '%s';" % (LetterTTC, request.headers['authentication'], start_date, end_date))
+                    cursor.execute("select case when datediff(now(),letter_created) <= %s then 'Processing' else 'Sent' end as status, letter_created, first_name, second_name, sub.company, first_line_address, city, postcode, salutation_number, content, sub.id, cancelled from submitted_letters sub inner join companies com on com.id = sub.submit_company_id where com.hashkey = '%s' and date(letter_created) >= '%s' and date(letter_created) <= '%s';" % (LetterTTC, request.headers['authentication'], start_date, end_date))
                     job_query = cursor.fetchall()
 
                     jobs= []
@@ -216,6 +218,7 @@ def check_status():
                         else:
                             param['Content'] = "No Message Attached Yet"
                         param['Job Id'] = job[10]
+                        param['Cancelled'] = job[11]
 
                         jobs.append(param)
 
@@ -223,6 +226,49 @@ def check_status():
 
             else:
                 return make_response(jsonify({'Call Failed': "Unauthenticated Call, Credentials Wrong"}),401)
+    except Exception, e:
+        print str(e)
+        return make_response(jsonify({'error': 'bad request'}), 400)
+
+# ALLOWS USERS TO CANCEL THEIR OWN LETTER WITHIN A DAY OF SUBMISSION
+@app.route('/handwritten/api/cancel_letter', methods=['POST'])
+def cancel_letter():
+    try:
+        if not request.headers or "authentication" not in request.headers:
+            return make_response(jsonify({'error': 'Please provide authentication'}), 401)
+
+        else:
+            if check_authentication(request.headers["authentication"]) == True:
+
+                if "job_ids" not in request.json:
+                    return make_response(jsonify({'error': 'Please enter all required details - missing job_ids array'}), 428)
+                else:
+                    cancelled_jobs = request.json["job_ids"]
+                    hashkey = request.headers["authentication"]
+                    jobs_to_be_cancelled = []
+                    non_cancelled_letters = []
+
+                    if isinstance(cancelled_jobs, list):
+                        for job in cancelled_jobs:
+                            cursor.execute("select distinct sub.id from submitted_letters sub inner join companies comp on comp.id = sub.submit_company_id where comp.hashkey = '%s' and sub.id = %s and datediff(now(), letter_created) < 1;" % (hashkey, job))
+                            result = str(cursor.fetchone()).replace("(", "").replace("L,)", "")
+                            if result == 'None':
+                                non_cancelled_letters.append(job)
+                            else:
+                                jobs_to_be_cancelled.append(result)
+
+                        jobs_to_be_cancelled_string = str(jobs_to_be_cancelled).replace("[", ""). replace("]", "")
+
+                        cursor.execute("update submitted_letters set cancelled = 1 where id in (%s);" % jobs_to_be_cancelled_string)
+                        db.commit()
+
+                        return make_response(jsonify({'Success': True, "Jobs_Cancelled": jobs_to_be_cancelled, "Jobs_Not_Cancelled": non_cancelled_letters}), 200)
+
+                    else:
+                        return make_response(jsonify({'Call Failed': "job_ids variable need to be in an array"}), 415)
+
+            else:
+                return make_response(jsonify({'Call Failed': "Unauthenticated Call, Credentials Wrong"}), 401)
     except Exception, e:
         print str(e)
         return make_response(jsonify({'error': 'bad request'}), 400)
