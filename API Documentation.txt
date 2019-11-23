@@ -1,0 +1,195 @@
+== brandwritten Handwriting API ==
+
+------------------------------------------------------------------
+
+==== Usage: ====
+
+In the same way that Microsoft® Outlook sends instructions to your mail server to send an email to a specific person with the content that you have created, [http://www.brandwritten.co.uk brandwritten's] API sends us the same instructions except the thing that is sent out is a beautiful handwritten letters, created with premium stationary through the post instead of an email. Everything we do is crafted using a rollerball pen and paper, no ink-jet printed handwritten fonts here!
+
+This API is designed to be implemented within your own tech stack or within a CRM system to improve the convenience of using our service and increase the speed of your handwritten letter from intent to send a letter to sent as much as possible. Like most other web applications, this is a common syncronous REST API and keeps to widely used error standards. 
+
+Please view our [http://www.brandwritten.co.uk website] to find our more about us and how to using our service can help your company to make the best impression with your clients and new potential ones too.
+
+==== Registering to use our API ====
+
+For more information about pricing and to obtain an '''authorisation key''' to use this API please email us at [http://mailto:Info@brandwritten.com?Subject=Brandwritten%20API%20Registration info@brandwritten.com] and we will get you up and going as soon as possible. This '''authorisation key''' and an account with brandwritten is needed in order to send any letters to any recipients. 
+
+
+------------------------------------------------------------------
+
+
+==== Features ====
+Currently the using the functionality of our API you can achieve the following things:
+* Submit a letter to be sent through our service
+* Attach content to this letter based on a pdf, html or docx file templates
+* Check the status of the letters that you have submitted 
+* Cancel a letter that you have previously submitted
+
+
+
+==== Authorisation ====
+Each call to our API needs to be properly authorised so that the letters that you have ordered cannot be changed by anyone else and vice versa. When you setup an account with us we will give you an authorisation key that will be associated with your account.  The letters that you order through this API using this authorisation key will be billed to you at the end of the month, if they are not cancelled within one day of submission.
+
+To use this authorisation key, add a header to your call;
+<code>-H "authentication: {Insert Your Authorisation Key}"</code>
+
+Your call will not be successful unless you have a valid authorisation key, additionally your letter will not be created, sent or billed to you. 
+
+
+------------------------------------------------------------------
+=== Methods ===
+
+===== Submit a letter =====
+
+Submit a letter endpoint :
+
+<code> http://api.brandwritten.com:10101/handwritten/api/submit</code>
+
+
+When you submit a letter to us, you are essentially opening up a job for us to send this letter to your intended recipient through our service. The time between letter submission and your recipient receiving their letter depends on your account status and the agreement between yourself and brandwritten. If you do not submit content for the letter (see next section) the letter that you request through this call will not be serviced by brandwritten. 
+
+
+Each letter submission has a standard set of variables that need to be attached to the call:
+* ''first_name'' (obligatory) - the first name of the recipient
+* ''second_name'' (obligatory) - the second name of the recipient
+* ''company" (optional) - the company of the recipient
+* ''first_line_address'' (obligatory) - the first line of the address where the letter should be sent to the recipient
+* ''second_line_address'' (optional) - the second line of the address where the letter should be sent to the recipient
+* ''city'' (obligatory) - the city of the address where the letter should be sent to the recipient
+* ''postcode'' (obligatory) -  the postcode of the address where the letter should be sent to the recipient
+* ''country'' (optional) * -  the country of the address where the letter should be sent to the recipient
+* ''salutation_type'' (obligatory) * - the salutation type of the letter 
+
+
+Special considerations:
+* country - if this field is left blank then it will be assumed that your letter is going to a postal address in the UK and will be send in the royal mail as such.
+* salutation_type - this field denotes how you would like the letter to be laid out:
+
+# 1 - The first_name and second_name variables are in the top row on the front envelope
+# 2 -Only the first_name variable is on the top row of the envelope
+
+
+These variables should be sent within a json object within the data section of the request and a header in your request must denote this.
+e.g.
+<code>-H "Content-Type: application/json"</code> 
+
+Upon successful submission of a letter you will receive a ''job_id'' within the response. This job_id is needed to attach content to your letter and if necessary for cancelling your letters.
+
+
+Example Request:
+
+<code>curl -X POST -H "authentication: {your authorisation key} -H "Content-Type: application/json" -d '{"first_name":"{enter the first name of the intended recipient}", "second_name": "{enter the second name of the intended recipient}", "company":"{enter the first name of the intended recipient}", "first_line_address": "{enter the first line of the intended recipient's address}", "second_line_address": "{enter the second line of the intended recipient's address}", "city":"{enter the city of the intended recipient's address}", "country":"{country}", "postcode":"{enter the postcode of the intended recipient's address}", "salutation_type": {enter the intended salutation type}' "http://api.brandwritten.com:10101/handwritten/api/submit"</code>
+
+
+===== Attach Content to a Previously Submitted Letter =====
+ 
+Submit the content of a letter endpoint :
+
+<code> http://api.brandwritten.com:10101/handwritten/api/submit_file</code>
+
+
+With this call you can send us the content of your letter i.e. what you want to write to your recipient about. This allows you to submit your own letter or message format to meet you needs, have logo headers and integrate the variables that you attached to your submit letter call (above). The formats that we allow for this are PDF, HTML or DOCX files. Unless we receive content for each job_id, your letter will not be sent and you will be charged for it.
+
+Each letter content submission has a standard set of variables that need to be attached to the call:
+* ''job_id'' - this was within the response of your successful letter submission call
+* ''message'' - this is the file that you would like to submit as the letter content in the supported file type specified above.
+
+Note - the data of call is not send as json object but instead as a API form
+
+
+Variables such as {first_name}, {company} etc. that have been specified in your letter submission can be included within your letter. If the dynamic variable if found within your content file with curly braces around it the variable will be written with the curly braces and variable name replaced by what you submitted in your initial letter submission associated with the job_id  Feel free to add images to these your content to create letter headers. The stock of stationary that your letter will be created with will be discussed between us upon account creation and only the images will be printed, as described before all text will be handwritten with a rollerball pen. 
+
+
+Upon successful content submission you will receive a 200 response with a success field saying "Message successfully added to job"
+
+
+Example Request:
+
+<code>curl -X POST -H "authentication: {Your Authorisation Key}"  -H "Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW" -F "job_id={The job_id that you would like to add content for}" -F "message=@{local path to the file to be submitted}" "http://api.brandwritten.com:10101/handwritten/api/submit_file"</code>
+
+
+==== Check on the Status of Your Previously Submitted Jobs ====
+
+Check on your submitted letters endpoint:
+
+<code>http://api.brandwritten.com:10101/handwritten/api/status</code>
+
+
+This call can be used to check up on the status of your previously submitted letters within a select date period. As specified above, the time that your letter take to arrive with their recipients depends on how you account is set up and can be organised with us by [http://mailto:Info@brandwritten.com?Subject=Brandwritten%20API%20Registration emailing us]
+
+Each letter status call has a standard set of variables that need to be attached to the call:
+* ''start_date'' - the start date of your status query
+* ''end_date'' - the end date of your status query
+
+note - these date correspond to the date that your originally submitted the letter and the dates are inclusive.
+
+
+Example Request:
+
+<code>curl -X POST -H "authentication:  {Your Authorisation Key}" -H "Content-Type: application/json" -d '{"start_date": "{The start date of your query}", "end_date":"{The start date of your query}"' "http://api.brandwritten.com:10101/handwritten/api/status"</code>
+
+
+In the response you will received the following variables:
+*''Cancelled'' - Denotes if the letter has been cancelled 0 = no , 1 = yes
+*''City'' - The city detailed in the original letter submission
+*''Company'' - The company detailed in the original letter submission
+*''Content'' - "Message Attached" if content has successfully been attached to the job_id, "No Message Attached Yet" if not
+*''First Line Address'' - The first_line_address detailed in the original letter submission
+*''First Name'' - The first_name detailed in the original letter submission
+*''Job Id'' - The job_id in question
+*''Letter Created'' - The date that the letter was submitted by you
+*''Postcode'' - The postcode detailed in the original letter submission
+*''Salutation Number'' - The salutation_type detailed in the original letter submission
+*''Second Name'' - The second_name detailed in the original letter submission
+*''Status'' - The status of the letter *
+
+Special considerations:
+* ''Status'' - This shows where the letter is in our pipeline
+# Processing - We are currently processing your letter
+# Sent - Your letter is in the post on it's way to your intended recipient (time to delivery from this point does depend on royal mail and the type of stamp used on your letter, [http://mailto:Info@brandwritten.com?Subject=Brandwritten%20API%20Registration contact us] for for details on this)
+
+
+==== Cancel a Previously Submitted Job ====
+
+Cancel previously submitted letters endpoint:
+
+<code>http://api.brandwritten.com:10101/handwritten/api/cancel_letter</code>
+
+
+You can use this call to delete letters that you have previously submitted, '''this feature is only available for 24 hours after initial submission of the job_id.''' After this time we may have already sent your letter or be writing it for you and therefore you will not be able to stop it and you will be charged for the letter.  
+
+Each letter cancellation call has a standard set of variables that need to be attached to the call:
+* ''job_ids'' - An array of job_ids that you would like to be cancelled
+
+note - the job_ids variable must be an array for the call to work
+
+Example Request 
+
+<code>curl -X POST -H "authentication: {Your Authorisation Key}" -H "Content-Type: application/json" -d '{"job_ids":[{first job_id to be cancelled},{second job_id to be cancelled}]}' "http://api.brandwritten.com:10101/handwritten/api/cancel_letter"</code>
+
+In the response you will received two arrays:
+* ''Jobs_Ids_Cancelled'' - This array details the job_ids that were successfully cancelled
+* ''Jobs_Ids_Not_Cancelled'' - - This array details the job_ids that were unsuccessfully cancelled because they were submitted more than 24 hours ago
+
+
+
+=== Potential Response Errors ===
+
+* 401 - {'Call Failed': "Unauthenticated Call, Credentials Wrong"} - This is because your authorisation key is wrong  [http://mailto:Info@brandwritten.com?Subject=Brandwritten%20API%20Registration contact us] to sort this out.
+* 401 - {'error': 'Please provide authentication'} - This is because there is no authorisation header in your call
+* 428 - {'error': 'Please enter all required details - missing {field}' - A obligatory field is missing from your letter submission
+* 428 - {'error': 'Please enter all required details - missing job_ids array'} - There is no array of job_ids to be changed in your request
+* 428 - {'Call Failed': "job_ids variable need to be in an array"} - When referencing job_ids in a request they need to be in an array for the call to be successful
+* 415 - {'Call Failed': "No handwritten message content, please add content"} - This is due to a empty message parameter in your call to http://api.brandwritten.com:10101/handwritten/api/submit_file
+* 415 - {'Call Failed': "No job_id corresponding to previously submitted letter given"} - The job_id that you are trying to reference is invalid
+* 415 - {'Call Failed': "Message already attached to this letter"} - Content has previously been submitted for that job_id. If you would like the change the content of the letter please cancel it and then resubmit it again.
+* 415 - {'Call Failed': "Incorrect file type"} - The file that you tried to attach to a letter is not of the right file type. Support file types are HTML, PDF and DOCX
+* 400 - {'error': 'Please provide start_date and end_date parameters'} - There needs to be a start_date and end_date for your status query call
+* 400 - {'error': 'bad request'} - Unknown Error
+
+
+
+
+------------------------------------------------------------------
+
+We have developed this for the widest range of business environments possible, however if you feel there is anywhere we can improve, or if you like to comment/ suggest extra features, feel free to contact me at Bruce@Brandwritten.com
